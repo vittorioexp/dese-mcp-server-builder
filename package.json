@@ -1,0 +1,30 @@
+{
+  "name": "dese-mcp-server-builder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dese MCP Server Builder — enterprise platform for generating, testing, validating, and deploying MCP servers",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "db:generate": "pnpm --filter @dese-mcp/database db:generate",
+    "db:migrate": "pnpm --filter @dese-mcp/database db:migrate",
+    "db:push": "pnpm --filter @dese-mcp/database db:push",
+    "db:seed": "pnpm --filter @dese-mcp/database db:seed",
+    "clean": "turbo run clean && rimraf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "prettier": "^3.4.2",
+    "rimraf": "^6.0.1",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

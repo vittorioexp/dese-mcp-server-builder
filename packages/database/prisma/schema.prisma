@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+  accounts      Account[]
+  memberships   OrganizationMember[]
+  apiKeys       ApiKey[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members  OrganizationMember[]
+  projects McpProject[]
+  apiKeys  ApiKey[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           String   @default("developer")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+model McpProject {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  inputSource    String
+  inputConfig    Json     @default("{}")
+  status         String   @default("draft")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions     McpProjectVersion[]
+  deployments  Deployment[]
+  jobs         Job[]
+  metrics      ProjectMetric[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([status])
+  @@map("mcp_projects")
+}
+
+model McpProjectVersion {
+  id           String   @id @default(cuid())
+  projectId    String
+  version      String
+  changelog    String?
+  artifactPath String?
+  manifest     Json?
+  isValidated  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  project      McpProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  validations  ValidationRun[]
+  deployments  Deployment[]
+
+  @@unique([projectId, version])
+  @@index([projectId])
+  @@map("mcp_project_versions")
+}
+
+model ValidationRun {
+  id         String   @id @default(cuid())
+  versionId  String
+  valid      Boolean
+  issues     Json     @default("[]")
+  durationMs Int
+  createdAt  DateTime @default(now())
+
+  version McpProjectVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+  @@map("validation_runs")
+}
+
+model Deployment {
+  id         String   @id @default(cuid())
+  projectId  String
+  versionId  String
+  target     String
+  status     String   @default("pending")
+  config     Json     @default("{}")
+  url        String?
+  logs       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  project McpProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version McpProjectVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([versionId])
+  @@index([status])
+  @@map("deployments")
+}
+
+model Job {
+  id          String    @id @default(cuid())
+  projectId   String?
+  type        String
+  status      String    @default("pending")
+  payload     Json
+  result      Json?
+  error       String?
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project McpProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([type, status])
+  @@map("jobs")
+}
+
+model ApiKey {
+  id             String    @id @default(cuid())
+  name           String
+  keyHash        String    @unique
+  keyPrefix      String
+  userId         String?
+  organizationId String?
+  scopes         String[]  @default([])
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  revokedAt      DateTime?
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@map("api_keys")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  metadata   Json     @default("{}")
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model ProjectMetric {
+  id         String   @id @default(cuid())
+  projectId  String
+  metricType String
+  value      Float
+  labels     Json     @default("{}")
+  recordedAt DateTime @default(now())
+
+  project McpProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, metricType, recordedAt])
+  @@map("project_metrics")
+}
+
+model Plugin {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  version     String
+  type        String
+  entryPoint  String
+  config      Json     @default("{}")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type, enabled])
+  @@map("plugins")
+}
